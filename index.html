@@ -52,6 +52,17 @@
         .stamp-animation { animation: stamp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes stamp { 0% { transform: scale(3) rotate(0deg); opacity: 0; } 100% { transform: scale(1) rotate(-8deg); opacity: 0.8; } }
 
+        /* Zoom Table Animation */
+        .zoom-in-out {
+            animation: zoom-card 2.5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        @keyframes zoom-card {
+            0% { transform: scale(0.5); opacity: 0; }
+            20% { transform: scale(1.1); opacity: 1; }
+            80% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.2); opacity: 0; }
+        }
+
         /* Enhanced Seating Highlight Animation */
         .glow-animation {
             animation: glow-pulse 2s infinite ease-in-out;
@@ -66,7 +77,7 @@
             }
             50% { 
                 box-shadow: 0 0 25px rgba(197, 160, 89, 1), 0 0 50px rgba(197, 160, 89, 0.5); 
-                transform: scale(1.25) translateY(-5px);
+                transform: scale(1.3) translateY(-5px);
                 background-color: #D4AF37;
             }
             100% { 
@@ -139,6 +150,7 @@
             modalText: document.getElementById('modal-message'),
             welcome: document.getElementById('welcome-screen'),
             checkin: document.getElementById('checkin-screen'),
+            zoom: document.getElementById('zoom-screen'),
             seating: document.getElementById('seating-screen'),
             nameInput: document.getElementById('name-input'),
             guestNameDisplay: document.querySelectorAll('.guest-name-label'),
@@ -214,6 +226,7 @@
             const found = allGuests.find(g => normalize(g.kana) === input || normalize(g.name) === input);
             if (!found) return showModal("お名前が見つかりませんでした　スタッフまでお声がけください");
 
+            clearGuestUI();
             currentGuest = found;
             ui.guestNameDisplay.forEach(el => el.textContent = `${found.name} 様`);
             ui.welcome.classList.add('hidden');
@@ -237,9 +250,10 @@
                 setTimeout(() => {
                     ui.stampMark.classList.remove('hidden');
                     ui.stampMark.classList.add('stamp-animation');
+                    
+                    // 1.5秒後にズーム表示へ移行
                     setTimeout(() => {
-                        showSeating();
-                        isProcessing = false;
+                        showZoomEffect();
                     }, 1500);
                 }, 1000);
             } catch (e) {
@@ -248,34 +262,57 @@
             }
         };
 
+        function showZoomEffect() {
+            ui.checkin.classList.add('hidden');
+            ui.zoom.classList.remove('hidden');
+            document.getElementById('zoom-table-no').textContent = currentGuest.table || "";
+            
+            // 2.5秒間ズーム表示を見せた後、本番の席次表へ
+            setTimeout(() => {
+                ui.zoom.classList.add('hidden');
+                showSeating();
+                isProcessing = false;
+            }, 2500);
+        }
+
         function showSeating() {
             document.getElementById('table-no').textContent = currentGuest.table || "";
             
-            // Reset all table styles
             document.querySelectorAll('.table-item').forEach(el => {
-                el.classList.remove('bg-gold-500', 'text-white', 'glow-animation', 'shadow-2xl', 'scale-110');
+                el.classList.remove('bg-gold-500', 'text-white', 'glow-animation', 'shadow-2xl');
             });
 
-            // Highlight target table from Firebase tableID
             if (currentGuest.tableID) {
                 const target = document.getElementById(currentGuest.tableID);
                 if (target) {
                     target.classList.add('text-white', 'glow-animation');
-                    // Scroll to the highlighted table after a short delay
                     setTimeout(() => {
                         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }, 500);
                 }
             }
-            ui.checkin.classList.add('hidden');
             ui.seating.classList.remove('hidden');
+        }
+
+        function clearGuestUI() {
+            ui.guestNameDisplay.forEach(el => el.textContent = "");
+            document.getElementById('table-no').textContent = "";
+            document.getElementById('zoom-table-no').textContent = "";
+            ui.circleSvg.classList.add('hidden');
+            ui.stampMark.classList.add('hidden');
+            ui.stampMark.classList.remove('stamp-animation');
+            document.querySelectorAll('.table-item').forEach(el => {
+                el.classList.remove('text-white', 'glow-animation');
+            });
         }
 
         window.reset = () => {
             ui.seating.classList.add('hidden');
+            ui.zoom.classList.add('hidden');
             ui.checkin.classList.add('hidden');
             ui.welcome.classList.remove('hidden');
             ui.nameInput.value = "";
+            clearGuestUI();
             currentGuest = null;
             isProcessing = false;
             window.scrollTo(0,0);
@@ -323,21 +360,14 @@
     <div id="checkin-screen" class="hidden min-h-screen p-4 flex flex-col items-center justify-center">
         <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-6 shadow-2xl text-center relative overflow-hidden flex flex-col items-center min-h-[500px]">
             <p class="font-serif text-gold-500 text-xs tracking-[0.4em] mb-12">Seating guidance</p>
-            
             <div id="interaction-layer" class="relative w-full py-20 flex flex-col items-center justify-center mb-8 bg-white/50 rounded-3xl overflow-hidden">
                 <div class="guide-text mb-4 z-20">
-                    <span class="text-ink font-bold text-s bg-white/80 px-4 py-1.5 rounded-full shadow-sm border border-ink/10">
-                        受付スタッフにお見せください
-                    </span>
+                    <span class="text-ink font-bold text-s bg-white/80 px-4 py-1.5 rounded-full shadow-sm border border-ink/10">受付スタッフにお見せください</span>
                 </div>
-
                 <h3 class="guest-name-label text-4xl font-bold z-20 mb-2"></h3>
-                
-
                 <svg id="circle-svg" class="absolute inset-0 z-10 w-full h-full p-4 hidden" viewBox="0 0 200 200">
                     <circle cx="100" cy="100" r="80" fill="none" stroke="#D44D44" stroke-width="4" class="circle-draw" />
                 </svg>
-
                 <div id="stamp-mark" class="hidden absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
                     <div class="border-4 border-ink text-ink text-3xl font-black p-4 rounded-xl uppercase -rotate-12 bg-white/90 shadow-xl">Check-in OK</div>
                 </div>
@@ -346,19 +376,25 @@
         <button onclick="reset()" class="mt-8 text-[10px] text-gray-400 underline">一つ戻る</button>
     </div>
 
+    <!-- 2.5 Zoom Display Screen (New) -->
+    <div id="zoom-screen" class="hidden fixed inset-0 z-[80] bg-charcoal flex flex-col items-center justify-center p-6">
+        <div class="zoom-in-out w-full max-w-sm aspect-square bg-white rounded-[3rem] shadow-2xl flex flex-col items-center justify-center text-center p-12 border-[12px] border-gold-300">
+            <p class="font-serif text-gold-500 text-sm tracking-[0.5em] mb-8 uppercase">Your Table</p>
+            <h4 id="zoom-table-no" class="text-7xl font-serif font-bold text-charcoal"></h4>
+        </div>
+    </div>
+
     <!-- 3. Seating Chart Screen -->
-    <div id="seating-screen" class="hidden min-h-screen p-6 flex flex-col items-center">
-        <!-- Result Panel -->
+    <div id="seating-screen" class="hidden min-h-screen p-6 flex flex-col items-center bg-sand">
         <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-10 shadow-2xl text-center mb-10 border-t-[10px] border-success">
             <h3 class="guest-name-label text-3xl font-bold mb-6"></h3>
             <div class="py-8 border-y border-gold-100 mb-6 flex flex-col items-center justify-center min-h-[140px]">
                 <p class="text-[10px] text-gray-400 tracking-[0.4em] mb-2 uppercase">Your Table</p>
-                <p id="table-no" class="text-4xl font-serif font-bold text-gold-700 whitespace-nowrap overflow-hidden text-ellipsis w-full px-2"></p>
+                <p id="table-no" class="text-4xl font-serif font-bold text-gold-700"></p>
             </div>
             <p class="text-xs text-gray-400 leading-relaxed">ご列席ありがとうございます<br>ぜひお楽しみください</p>
         </div>
 
-        <!-- Layout Map -->
         <div class="w-full max-w-md bg-white/70 p-10 rounded-[3rem] shadow-sm mb-12 border border-white">
             <div class="flex justify-center mb-12">
                 <div class="w-40 py-2 border-b-2 border-gold-200 text-center">
@@ -367,21 +403,16 @@
             </div>
 
             <div class="space-y-16">
-                <!-- Row 1: Left to Right A, B, C -->
                 <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
                     <div id="table-A" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">A</div>
                     <div id="table-B" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">B</div>
                     <div id="table-C" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">C</div>
                 </div>
-
-                <!-- Row 2: Left to Right D, E, F -->
                 <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
                     <div id="table-D" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">D</div>
                     <div id="table-E" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">E</div>
                     <div id="table-F" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">F</div>
                 </div>
-
-                <!-- Row 3: Left to Right G, H -->
                 <div class="flex justify-center space-x-12 font-serif text-xl">
                     <div id="table-G" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">G</div>
                     <div id="table-H" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700 ease-out">H</div>
