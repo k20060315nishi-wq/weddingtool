@@ -251,13 +251,12 @@
                     ui.stampMark.classList.remove('hidden');
                     ui.stampMark.classList.add('stamp-animation');
                     
-                    // 1.5秒後にズーム表示へ移行
                     setTimeout(() => {
                         showZoomEffect();
                     }, 1500);
                 }, 1000);
             } catch (e) {
-                showModal("お席探しに時間がかかっています　スタッフにお声がけください");
+                showModal("通信エラーが発生しました　スタッフにお声がけください");
                 reset();
             }
         };
@@ -265,9 +264,21 @@
         function showZoomEffect() {
             ui.checkin.classList.add('hidden');
             ui.zoom.classList.remove('hidden');
-            document.getElementById('zoom-table-no').textContent = currentGuest.table || "";
             
-            // 2.5秒間ズーム表示を見せた後、本番の席次表へ
+            // tableID が直接 "A" や "B" の場合の処理
+            let displayTable = "";
+            if (currentGuest.tableID) {
+                // ハイフンが含まれる場合はハイフン以降、含まれない場合はそのまま使う
+                displayTable = currentGuest.tableID.includes('-') 
+                    ? currentGuest.tableID.split('-')[1] 
+                    : currentGuest.tableID;
+            } else {
+                // tableID が無い場合は table フィールドから抽出 (例: "ご親族席" -> "ご")
+                displayTable = (currentGuest.table || "").charAt(0);
+            }
+            
+            document.getElementById('zoom-table-no').textContent = displayTable;
+            
             setTimeout(() => {
                 ui.zoom.classList.add('hidden');
                 showSeating();
@@ -282,8 +293,13 @@
                 el.classList.remove('bg-gold-500', 'text-white', 'glow-animation', 'shadow-2xl');
             });
 
+            // HTML側のIDは "table-A" 形式なので、結合して検索する
             if (currentGuest.tableID) {
-                const target = document.getElementById(currentGuest.tableID);
+                const elementId = currentGuest.tableID.includes('table-') 
+                    ? currentGuest.tableID 
+                    : `table-${currentGuest.tableID}`;
+                    
+                const target = document.getElementById(elementId);
                 if (target) {
                     target.classList.add('text-white', 'glow-animation');
                     setTimeout(() => {
@@ -373,14 +389,14 @@
                 </div>
             </div>
         </div>
-        <button onclick="reset()" class="mt-8 text-[10px] text-gray-400 underline">一つ戻る</button>
+        <button onclick="reset()" class="mt-8 text-[10px] text-gray-400 underline">Top Screen</button>
     </div>
 
-    <!-- 2.5 Zoom Display Screen (New) -->
+    <!-- 2.5 Zoom Display Screen -->
     <div id="zoom-screen" class="hidden fixed inset-0 z-[80] bg-charcoal flex flex-col items-center justify-center p-6">
         <div class="zoom-in-out w-full max-w-sm aspect-square bg-white rounded-[3rem] shadow-2xl flex flex-col items-center justify-center text-center p-12 border-[12px] border-gold-300">
             <p class="font-serif text-gold-500 text-sm tracking-[0.5em] mb-8 uppercase">Your Table</p>
-            <h4 id="zoom-table-no" class="text-7xl font-serif font-bold text-charcoal"></h4>
+            <h4 id="zoom-table-no" class="text-9xl font-serif font-bold text-charcoal"></h4>
         </div>
     </div>
 
