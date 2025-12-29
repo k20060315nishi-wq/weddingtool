@@ -36,9 +36,11 @@
         .bg-visual-main { background-image: url('https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=2000&q=80'); background-size: cover; background-position: center; }
         .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         
+        /* ローディングアニメーション */
         .spinner { width: 40px; height: 40px; border: 3px solid rgba(197, 160, 89, 0.2); border-radius: 50%; border-top-color: #C5A059; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
+        /* 円を描くアニメーション */
         .circle-draw {
             stroke-dasharray: 1000;
             stroke-dashoffset: 1000;
@@ -46,14 +48,28 @@
         }
         @keyframes draw { to { stroke-dashoffset: 0; } }
 
+        /* スタンプアニメーション */
         .stamp-animation { animation: stamp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         @keyframes stamp { 0% { transform: scale(3) rotate(0deg); opacity: 0; } 100% { transform: scale(1) rotate(-8deg); opacity: 0.8; } }
 
+        /* 卓が光るエフェクト */
+        .glow-animation {
+            animation: glow-pulse 2s infinite ease-in-out;
+            box-shadow: 0 0 20px rgba(197, 160, 89, 0.8);
+            border: 2px solid #D4AF37 !important;
+            z-index: 10;
+        }
+        @keyframes glow-pulse {
+            0% { box-shadow: 0 0 5px rgba(197, 160, 89, 0.4); transform: scale(1.1); }
+            50% { box-shadow: 0 0 30px rgba(197, 160, 89, 1), 0 0 50px rgba(197, 160, 89, 0.4); transform: scale(1.15); }
+            100% { box-shadow: 0 0 5px rgba(197, 160, 89, 0.4); transform: scale(1.1); }
+        }
+
         #interaction-layer { touch-action: none; cursor: pointer; }
         .guide-text { animation: pulse 2s infinite; transition: all 0.3s ease; }
-        @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.02); } }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; transform: translateY(0); } 50% { opacity: 1; transform: translateY(5px); } }
         
-        .is-dragging .guide-text { animation: none; opacity: 1; border-color: #D44D44; border-style: solid; transform: scale(1.05); }
+        .is-dragging .guide-text { animation: none; opacity: 0; }
 
         .btn-gold-shimmer {
             position: relative;
@@ -223,12 +239,18 @@
 
         function showSeating() {
             document.getElementById('table-no').textContent = currentGuest.table || "";
+            
+            // 全ての卓のスタイルをリセット
             document.querySelectorAll('.table-item').forEach(el => {
-                el.classList.remove('bg-gold-500', 'text-white', 'scale-110', 'shadow-2xl');
+                el.classList.remove('bg-gold-500', 'text-white', 'glow-animation', 'shadow-2xl');
             });
+
+            // 該当する卓IDがあれば、光らせるクラスを追加
             if (currentGuest.tableID) {
                 const target = document.getElementById(currentGuest.tableID);
-                if (target) target.classList.add('bg-gold-500', 'text-white', 'scale-110', 'shadow-2xl');
+                if (target) {
+                    target.classList.add('bg-gold-500', 'text-white', 'glow-animation');
+                }
             }
             ui.checkin.classList.add('hidden');
             ui.seating.classList.remove('hidden');
@@ -286,15 +308,25 @@
     <div id="checkin-screen" class="hidden min-h-screen p-4 flex flex-col items-center justify-center">
         <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-6 shadow-2xl text-center relative overflow-hidden flex flex-col items-center min-h-[500px]">
             <p class="font-serif text-gold-500 text-[10px] tracking-[0.4em] mb-12">Confirmation</p>
-            <div id="interaction-layer" class="relative w-full py-20 flex items-center justify-center mb-8 bg-white/50 rounded-3xl">
-                <h3 class="guest-name-label text-4xl font-bold"></h3>
+            
+            <div id="interaction-layer" class="relative w-full py-20 flex flex-col items-center justify-center mb-8 bg-white/50 rounded-3xl overflow-hidden">
+                <!-- 案内文（名前のすぐ上に配置） -->
+                <div class="guide-text mb-4 z-20">
+                    <span class="text-ink font-bold text-[11px] bg-white/80 px-4 py-1.5 rounded-full shadow-sm border border-ink/10">
+                        受付スタッフにお見せください
+                    </span>
+                </div>
+
+                <h3 class="guest-name-label text-4xl font-bold z-20 mb-2"></h3>
+                
+                <!-- サブテキスト -->
+                <p class="text-[10px] text-gray-400 tracking-widest z-20">このまま画面をスワイプしてください</p>
+
                 <svg id="circle-svg" class="absolute inset-0 z-10 w-full h-full p-4 hidden" viewBox="0 0 200 200">
                     <circle cx="100" cy="100" r="80" fill="none" stroke="#D44D44" stroke-width="4" class="circle-draw" />
                 </svg>
-                <div class="guide-text absolute inset-0 border-2 border-dashed border-ink/20 rounded-full m-6 pointer-events-none flex items-center justify-center">
-                    <span class="text-ink font-bold text-[10px] bg-white px-2">受付スタッフにお見せください</span>
-                </div>
-                <div id="stamp-mark" class="hidden absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+
+                <div id="stamp-mark" class="hidden absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
                     <div class="border-4 border-ink text-ink text-3xl font-black p-4 rounded-xl uppercase -rotate-12 bg-white/90">Check-in OK</div>
                 </div>
             </div>
@@ -306,9 +338,9 @@
     <div id="seating-screen" class="hidden min-h-screen p-6 flex flex-col items-center">
         <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-10 shadow-2xl text-center mb-10 border-t-[10px] border-success">
             <h3 class="guest-name-label text-3xl font-bold mb-6"></h3>
-            <div class="py-8 border-y border-gold-100 mb-6">
+            <div class="py-8 border-y border-gold-100 mb-6 flex flex-col items-center justify-center min-h-[140px]">
                 <p class="text-[10px] text-gray-400 tracking-[0.4em] mb-2 uppercase">Your Table</p>
-                <p id="table-no" class="text-7xl font-serif font-bold text-gold-700"></p>
+                <p id="table-no" class="text-4xl font-serif font-bold text-gold-700 whitespace-nowrap overflow-hidden text-ellipsis w-full px-2"></p>
             </div>
             <p class="text-xs text-gray-400 leading-relaxed">ご列席ありがとうございます<br>お席までお進みください</p>
         </div>
@@ -320,26 +352,25 @@
                 </div>
             </div>
 
-            <!-- 会場レイアウト: 3-3-2 配置 (右から数える) -->
             <div class="space-y-12">
-                <!-- 1列目 (前): 3卓 -->
+                <!-- 1列目 (前): 左から A, B, C -->
                 <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
-                    <div id="table-C" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">C</div>
-                    <div id="table-B" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">B</div>
-                    <div id="table-A" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">A</div>
+                    <div id="table-A" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">A</div>
+                    <div id="table-B" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">B</div>
+                    <div id="table-C" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">C</div>
                 </div>
 
-                <!-- 2列目 (中): 3卓 -->
+                <!-- 2列目 (中): 左から D, E, F -->
                 <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
-                    <div id="table-F" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">F</div>
-                    <div id="table-E" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">E</div>
-                    <div id="table-D" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">D</div>
+                    <div id="table-D" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">D</div>
+                    <div id="table-E" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">E</div>
+                    <div id="table-F" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">F</div>
                 </div>
 
-                <!-- 3列目 (後): 2卓 (中央寄せ) -->
+                <!-- 3列目 (後): 左から G, H -->
                 <div class="flex justify-center space-x-12 font-serif text-xl">
-                    <div id="table-H" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">H</div>
-                    <div id="table-G" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">G</div>
+                    <div id="table-G" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">G</div>
+                    <div id="table-H" class="table-item w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">H</div>
                 </div>
             </div>
         </div>
