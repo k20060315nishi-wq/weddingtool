@@ -55,7 +55,6 @@
         
         .is-dragging .guide-text { animation: none; opacity: 1; border-color: #D44D44; border-style: solid; transform: scale(1.05); }
 
-        /* Premium Button Effects */
         .btn-gold-shimmer {
             position: relative;
             overflow: hidden;
@@ -78,16 +77,11 @@
                 rgba(255, 255, 255, 0) 100%
             );
             transform: rotate(45deg);
-            transition: all 0.6s;
             animation: shimmer 4s infinite;
         }
         @keyframes shimmer {
             0% { transform: translateX(-150%) rotate(45deg); }
             20%, 100% { transform: translateX(150%) rotate(45deg); }
-        }
-        .btn-gold-shimmer:active {
-            transform: scale(0.96);
-            background: #1a1a1a;
         }
     </style>
 
@@ -111,9 +105,6 @@
         let allGuests = []; 
         let currentGuest = null;
         let isProcessing = false;
-
-        let startX, startY;
-        const SWIPE_THRESHOLD = 80;
 
         const ui = {
             loading: document.getElementById('loading-overlay'),
@@ -146,7 +137,7 @@
                         currentUser = user;
                         startDataListening();
                     } else {
-                        signInAnonymously(auth).catch(e => showModal("認証エラーが発生しました。リロードしてください。"));
+                        signInAnonymously(auth).catch(e => showModal("認証エラーが発生しました"));
                     }
                 });
 
@@ -161,96 +152,45 @@
                 allGuests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 ui.loading.classList.add('hidden');
             }, (err) => {
-                console.error(err);
-                showModal("データの取得に失敗しました。ルールの設定（read）を確認してください。");
+                showModal("データ取得エラー");
             });
         }
 
         function setupInteraction() {
+            let startX, startY;
+            const SWIPE_THRESHOLD = 80;
             const getPos = (e) => {
                 const touch = e.touches ? e.touches[0] : e;
                 return { x: touch.clientX, y: touch.clientY };
             };
-
-            const onStart = (e) => {
-                if (isProcessing) return;
-                const pos = getPos(e);
-                startX = pos.x;
-                startY = pos.y;
+            ui.interactionLayer.addEventListener('touchstart', (e) => {
+                const pos = getPos(e); startX = pos.x; startY = pos.y;
                 ui.interactionLayer.classList.add('is-dragging');
-            };
-
-            const onMove = (e) => {
-                if (isProcessing || startX === undefined) return;
+            });
+            ui.interactionLayer.addEventListener('touchmove', (e) => {
+                if (isProcessing || !startX) return;
                 const pos = getPos(e);
                 const dist = Math.sqrt(Math.pow(pos.x - startX, 2) + Math.pow(pos.y - startY, 2));
-
                 if (dist > SWIPE_THRESHOLD) {
-                    startRecognition();
+                    startX = null;
+                    processCheckIn();
                 }
-            };
-
-            const onEnd = () => {
-                startX = undefined;
-                startY = undefined;
+            });
+            ui.interactionLayer.addEventListener('touchend', () => {
                 ui.interactionLayer.classList.remove('is-dragging');
-            };
-
-            ui.interactionLayer.addEventListener('mousedown', onStart);
-            ui.interactionLayer.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onEnd);
-
-            ui.interactionLayer.addEventListener('touchstart', (e) => {
-                if (ui.checkin.classList.contains('hidden')) return;
-                e.preventDefault();
-                onStart(e);
-            }, { passive: false });
-            ui.interactionLayer.addEventListener('touchmove', (e) => {
-                if (ui.checkin.classList.contains('hidden')) return;
-                e.preventDefault();
-                onMove(e);
-            }, { passive: false });
-            ui.interactionLayer.addEventListener('touchend', onEnd);
-        }
-
-        function startRecognition() {
-            if (isProcessing) return;
-            isProcessing = true;
-            startX = undefined; 
-
-            const guide = document.querySelector('.guide-text');
-            if(guide) guide.style.opacity = '0';
-            ui.circleSvg.classList.remove('hidden');
-
-            processCheckIn();
+            });
         }
 
         window.searchGuest = async () => {
-            if (isProcessing) return;
             const input = normalize(ui.nameInput.value);
-            if (!input) return showModal("お名前を「ひらがな」で入力してください");
-
+            if (!input) return showModal("お名前を入力してください");
             const found = allGuests.find(g => normalize(g.kana) === input || normalize(g.name) === input);
-            
-            if (!found) {
-                return showModal("お名前が見つかりませんでした　スタッフまでお声がけください");
-            }
+            if (!found) return showModal("お名前が見つかりませんでした　スタッフまでお声がけください");
 
             currentGuest = found;
             ui.guestNameDisplay.forEach(el => el.textContent = `${found.name} 様`);
-            
             ui.welcome.classList.add('hidden');
             ui.checkin.classList.remove('hidden');
-            
-            ui.circleSvg.classList.add('hidden');
-            ui.stampMark.classList.add('hidden');
-            ui.stampMark.classList.remove('stamp-animation');
-            const guide = document.querySelector('.guide-text');
-            if(guide) {
-                guide.style.opacity = '0.6';
-                guide.style.display = 'flex';
-            }
-            isProcessing = false;
             window.scrollTo(0,0);
         };
 
@@ -259,51 +199,37 @@
         }
 
         window.processCheckIn = async () => {
-            if (!currentGuest) return;
-            if (!currentUser) {
-                showModal("認証の準備ができていません。もう一度お試しください。");
-                isProcessing = false;
-                return;
-            }
+            if (isProcessing || !currentGuest) return;
+            isProcessing = true;
+            ui.circleSvg.classList.remove('hidden');
 
             try {
                 const guestRef = doc(db, GUESTS_COLLECTION, currentGuest.id);
-                await updateDoc(guestRef, {
-                    checkedIn: true,
-                    checkInTime: serverTimestamp()
-                });
+                await updateDoc(guestRef, { checkedIn: true, checkInTime: serverTimestamp() });
                 
                 setTimeout(() => {
                     ui.stampMark.classList.remove('hidden');
                     ui.stampMark.classList.add('stamp-animation');
-                    
                     setTimeout(() => {
                         showSeating();
                         isProcessing = false;
                     }, 1500);
                 }, 1000);
-
             } catch (e) {
-                console.error("Check-in Error:", e);
-                showModal("受付処理に失敗しました　スタッフまでお声がけください");
-                isProcessing = false;
+                showModal("お席探しに時間がかかっています　スタッフにお声がけください");
                 reset();
             }
         };
 
         function showSeating() {
-            document.getElementById('table-no').textContent = currentGuest.table || "未定";
+            document.getElementById('table-no').textContent = currentGuest.table || "";
             document.querySelectorAll('.table-item').forEach(el => {
                 el.classList.remove('bg-gold-500', 'text-white', 'scale-110', 'shadow-2xl');
             });
-
             if (currentGuest.tableID) {
                 const target = document.getElementById(currentGuest.tableID);
-                if (target) {
-                    target.classList.add('bg-gold-500', 'text-white', 'scale-110', 'shadow-2xl');
-                }
+                if (target) target.classList.add('bg-gold-500', 'text-white', 'scale-110', 'shadow-2xl');
             }
-
             ui.checkin.classList.add('hidden');
             ui.seating.classList.remove('hidden');
             window.scrollTo(0,0);
@@ -316,7 +242,6 @@
             ui.nameInput.value = "";
             currentGuest = null;
             isProcessing = false;
-            window.scrollTo(0,0);
         };
 
         window.onload = init;
@@ -326,107 +251,100 @@
 
     <div id="loading-overlay" class="fixed inset-0 z-[100] bg-sand/90 flex flex-col items-center justify-center">
         <div class="spinner mb-4"></div>
-        <p class="text-gold-700 text-[10px] tracking-[0.4em] uppercase">Syncing Data</p>
+        <p class="text-gold-700 text-[10px] tracking-[0.4em]">Loading</p>
     </div>
 
-    <div id="custom-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-        <div class="w-full max-w-sm glass-panel p-8 rounded-3xl text-center border-t-4 border-gold-500 shadow-2xl">
-            <p id="modal-message" class="text-base mb-6 leading-relaxed whitespace-pre-line font-medium"></p>
-            <button onclick="document.getElementById('custom-modal').classList.add('hidden')" class="w-full py-4 bg-charcoal text-white rounded-full text-xs tracking-widest uppercase">閉じる</button>
+    <div id="custom-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60">
+        <div class="w-full max-w-sm glass-panel p-8 rounded-3xl text-center shadow-2xl">
+            <p id="modal-message" class="text-base mb-6"></p>
+            <button onclick="document.getElementById('custom-modal').classList.add('hidden')" class="w-full py-4 bg-charcoal text-white rounded-full text-xs">閉じる</button>
         </div>
     </div>
 
+    <!-- 1. ウェルカム画面 -->
     <div id="welcome-screen" class="min-h-screen flex flex-col">
-        <div class="h-[40vh] bg-visual-main bg-overlay relative flex flex-col items-center justify-center text-center text-white px-6">
-            <div class="z-10 text-center">
-                <p class="font-serif text-gold-300 text-xs tracking-[0.4em] mb-2 uppercase">Thank You for coming</p>
-                <h1 class="font-serif text-5xl mb-4 italic">Wedding Party</h1>
-                <p class="text-s tracking-widest opacity-80 uppercase">Kohei & Haruka</p>
+        <div class="h-[40vh] bg-visual-main bg-overlay relative flex flex-col items-center justify-center text-center text-white">
+            <div class="z-10 px-6">
+                <p class="font-serif text-gold-300 text-xs tracking-[0.4em] mb-2">Color of stories</p>
+                <h1 class="font-serif text-6xl mb-4 italic">Wedding Party</h1>
+                <p class="text-xs tracking-widest opacity-80">Kohei & Haruka</p>
             </div>
         </div>
-        <div class="flex-grow p-8 flex flex-col items-center bg-sand">
+        <div class="flex-grow p-8 flex flex-col items-center">
             <div class="w-full max-w-sm space-y-12 mt-12 text-center">
                 <div class="space-y-2">
-                    <h2 class="text-xl font-serif tracking-[0.2em] uppercase text-charcoal font-bold">Check-in</h2>
-                    <p class="text-[10px] text-gray-400">フルネームを「ひらがな」で入力</p>
+                    <h2 class="text-3xl font-serif tracking-[0.2em] font-bold">Welcome</h2>
+                    <p class="text-x1 text-gray-400">フルネームを「ひらがな」で入力</p>
                 </div>
-                <input type="text" id="name-input" class="w-full py-4 text-3xl text-center bg-transparent border-b-2 border-gray-200 focus:border-gold-500 outline-none placeholder-gray-100 transition-colors" placeholder="まいはま　みきお" autocomplete="off">
-                
-                <div class="relative group">
-                    <!-- Decorative border glow -->
-                    <div class="absolute -inset-0.5 bg-gradient-to-r from-gold-300 to-gold-700 rounded-full blur opacity-30 group-active:opacity-60 transition duration-1000"></div>
-                    
-                    <button onclick="searchGuest()" class="btn-gold-shimmer w-full py-5 text-white rounded-full tracking-[0.5em] font-serif shadow-2xl transition-all uppercase text-sm font-bold flex items-center justify-center space-x-2">
-                        <span>Search</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gold-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </button>
-                </div>
+                <input type="text" id="name-input" class="w-full py-4 text-3xl text-center bg-transparent border-b-2 border-gray-200 focus:border-gold-500 outline-none" placeholder="まいはま　みきお">
+                <button onclick="searchGuest()" class="btn-gold-shimmer w-full py-5 text-white rounded-full tracking-[0.5em] font-serif shadow-2xl uppercase text-sm font-bold">Search</button>
             </div>
         </div>
     </div>
 
-    <div id="checkin-screen" class="hidden min-h-screen p-4 flex flex-col items-center justify-center bg-sand">
-        <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-6 shadow-2xl text-center relative overflow-hidden flex flex-col items-center min-h-[550px] border border-white">
-            <p class="font-serif text-gold-500 text-[10px] tracking-[0.4em] mb-12 uppercase">Identity Confirmation</p>
-            
-            <div id="interaction-layer" class="relative w-full py-20 flex items-center justify-center mb-8 bg-white/50 rounded-3xl overflow-hidden transition-all duration-300">
-                <h3 class="guest-name-label text-4xl font-bold text-charcoal z-0"></h3>
-                
+    <!-- 2. 受付操作画面 -->
+    <div id="checkin-screen" class="hidden min-h-screen p-4 flex flex-col items-center justify-center">
+        <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-6 shadow-2xl text-center relative overflow-hidden flex flex-col items-center min-h-[500px]">
+            <p class="font-serif text-gold-500 text-[10px] tracking-[0.4em] mb-12">Confirmation</p>
+            <div id="interaction-layer" class="relative w-full py-20 flex items-center justify-center mb-8 bg-white/50 rounded-3xl">
+                <h3 class="guest-name-label text-4xl font-bold"></h3>
                 <svg id="circle-svg" class="absolute inset-0 z-10 w-full h-full p-4 hidden" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="80" fill="none" stroke="#D44D44" stroke-width="4" stroke-linecap="round" class="circle-draw" />
+                    <circle cx="100" cy="100" r="80" fill="none" stroke="#D44D44" stroke-width="4" class="circle-draw" />
                 </svg>
-                
-                <div class="guide-text absolute inset-0 border-2 border-dashed border-ink/20 rounded-full m-6 pointer-events-none flex flex-col items-center justify-end pb-8">
-                    <span class="text-ink font-bold text-[10px] tracking-tighter bg-sand px-2">お名前の周りをくるっとなぞってください</span>
+                <div class="guide-text absolute inset-0 border-2 border-dashed border-ink/20 rounded-full m-6 pointer-events-none flex items-center justify-center">
+                    <span class="text-ink font-bold text-[10px] bg-white px-2">受付スタッフにお見せください</span>
                 </div>
-
                 <div id="stamp-mark" class="hidden absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                    <div class="border-4 border-ink text-ink text-3xl font-black p-4 rounded-xl uppercase tracking-tighter bg-white/90 shadow-lg">Welcome</div>
+                    <div class="border-4 border-ink text-ink text-3xl font-black p-4 rounded-xl uppercase -rotate-12 bg-white/90">Check-in OK</div>
                 </div>
-            </div>
-
-            <div class="mt-auto py-4">
-                <p class="text-[11px] text-gray-500 leading-relaxed px-4 italic">
-                    ※一定距離をなぞると受付が完了します
-                </p>
             </div>
         </div>
-        <button onclick="reset()" class="mt-12 text-[10px] text-gray-400 underline tracking-[0.2em] font-serif uppercase">Back</button>
+        <button onclick="reset()" class="mt-8 text-[10px] text-gray-400 underline">戻る</button>
     </div>
 
+    <!-- 3. 席次表画面 -->
     <div id="seating-screen" class="hidden min-h-screen p-6 flex flex-col items-center">
-        <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-10 shadow-2xl text-center mb-10 border-t-[10px] border-success relative">
-            <div class="mb-6">
-                <span class="text-success font-bold text-xs tracking-[0.3em] uppercase">Check-in Completed</span>
+        <div class="w-full max-w-sm glass-panel rounded-[2.5rem] p-10 shadow-2xl text-center mb-10 border-t-[10px] border-success">
+            <h3 class="guest-name-label text-3xl font-bold mb-6"></h3>
+            <div class="py-8 border-y border-gold-100 mb-6">
+                <p class="text-[10px] text-gray-400 tracking-[0.4em] mb-2 uppercase">Your Table</p>
+                <p id="table-no" class="text-7xl font-serif font-bold text-gold-700"></p>
             </div>
-            <h3 class="guest-name-label text-3xl font-bold mb-6 text-charcoal"></h3>
-            <div class="py-8 border-y border-gold-100 mb-6 bg-white/30 rounded-2xl">
-                <p class="text-[10px] text-gray-400 tracking-[0.4em] mb-2 uppercase font-serif">Your Table</p>
-                <p id="table-no" class="text-7xl font-serif font-bold text-gold-700 tracking-tighter"></p>
-            </div>
-            <p class="text-xs text-gray-400 tracking-widest leading-relaxed text-center">本日はご参列いただきありがとうございます<br>素敵なひとときをお過ごしください</p>
+            <p class="text-xs text-gray-400 leading-relaxed">ご列席ありがとうございます<br>お席までお進みください</p>
         </div>
 
-        <div class="w-full max-w-md bg-white/70 backdrop-blur-md p-10 rounded-[3rem] shadow-sm mb-12 border border-white">
-            <div class="flex justify-center mb-12 text-center">
-                <div class="w-40 py-2 border-b-2 border-gold-200">
-                    <span class="text-[10px] text-gray-400 tracking-[0.4em] uppercase font-serif">Main Table</span>
+        <div class="w-full max-w-md bg-white/70 p-10 rounded-[3rem] shadow-sm mb-12 border border-white">
+            <div class="flex justify-center mb-12">
+                <div class="w-40 py-2 border-b-2 border-gold-200 text-center">
+                    <span class="text-[10px] text-gray-400 tracking-[0.4em]">Main Table</span>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-8 justify-items-center font-serif text-xl">
-                <div id="table-A" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">A</div>
-                <div id="table-B" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">B</div>
-                <div id="table-C" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">C</div>
-                <div id="table-D" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">D</div>
-                <div id="table-E" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">E</div>
-                <div id="table-F" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">F</div>
-                <div id="table-G" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">G</div>
+
+            <!-- 会場レイアウト: 3-3-2 配置 (右から数える) -->
+            <div class="space-y-12">
+                <!-- 1列目 (前): 3卓 -->
+                <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
+                    <div id="table-C" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">C</div>
+                    <div id="table-B" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">B</div>
+                    <div id="table-A" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">A</div>
+                </div>
+
+                <!-- 2列目 (中): 3卓 -->
+                <div class="grid grid-cols-3 gap-4 justify-items-center font-serif text-xl">
+                    <div id="table-F" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">F</div>
+                    <div id="table-E" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">E</div>
+                    <div id="table-D" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">D</div>
+                </div>
+
+                <!-- 3列目 (後): 2卓 (中央寄せ) -->
+                <div class="flex justify-center space-x-12 font-serif text-xl">
+                    <div id="table-H" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">H</div>
+                    <div id="table-G" class="table-item w-20 h-20 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-md transition-all duration-700">G</div>
+                </div>
             </div>
         </div>
 
-        <button onclick="reset()" class="mb-16 text-[10px] text-gray-400 tracking-[0.3em] uppercase border border-gray-300 px-10 py-3 rounded-full">Top Screen</button>
+        <button onclick="reset()" class="mb-16 text-[10px] text-gray-400 tracking-[0.3em] border border-gray-300 px-10 py-3 rounded-full">Top Screen</button>
     </div>
 
 </body>
